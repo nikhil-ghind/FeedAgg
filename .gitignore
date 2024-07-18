@@ -1,0 +1,14 @@
+build/
+*.o
+*.a
+*.so
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+install_manifest.txt
+compile_commands.json
+.DS_Store
+*.swp
+*.swo
+*~
