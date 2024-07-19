@@ -181,6 +181,27 @@ Running... Press Ctrl+C to stop.
 
 ---
 
+## Test / Smoke Check
+
+There is no separate unit-test target — the system is exercised end-to-end:
+
+```bash
+# 1. Build (Release)
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build --parallel
+
+# 2. Run the all-in-one binary; verify per-feed throughput ~1k ticks/s and
+#    aggregated throughput ~15k ticks/s in the metrics report.
+./build/feed-agg
+
+# 3. In a second terminal, attach the consumer and verify NBBO updates
+#    are visible across process boundaries:
+./build/feed-consumer nbbo
+```
+
+A run is considered healthy if (a) all 15 feeds report non-zero ticks/s, (b) parse latency p99 stays sub-microsecond on a modern CPU, and (c) the standalone consumer prints NBBO updates while `feed-agg` is running.
+
+---
+
 ## Project Layout
 
 ```
