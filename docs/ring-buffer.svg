@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 400" width="880" height="400" role="img" aria-label="Feed threads write ticks into a lock-free shared memory ring buffer; the head counter advances ahead of the tail counter which the aggregator drains">
+  <title>FeedAgg — lock-free SHM ring: head chases tail</title>
+
+  <text x="16" y="26" fill="#8b949e" font-family="Helvetica, Arial, sans-serif" font-size="16" font-weight="bold">FeedAgg — one lock-free SHM ring per feed, drained by the aggregator</text>
+
+  <!-- producers -->
+  <g font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#8b949e">
+    <text x="16" y="58" fill="#58a6ff" font-size="13" font-weight="bold">15 feed threads</text>
+    <rect x="16" y="72" width="110" height="26" rx="4" fill="none" stroke="#6e7681" stroke-width="1.5"/>
+    <text x="71" y="90" text-anchor="middle">NASDAQ</text>
+    <rect x="16" y="108" width="110" height="26" rx="4" fill="none" stroke="#6e7681" stroke-width="1.5"/>
+    <text x="71" y="126" text-anchor="middle">NYSE</text>
+    <rect x="16" y="144" width="110" height="26" rx="4" fill="none" stroke="#6e7681" stroke-width="1.5"/>
+    <text x="71" y="162" text-anchor="middle">... C2</text>
+    <text x="16" y="192">ShmProducer::write</text>
+    <text x="16" y="210">CAS on head, then</text>
+    <text x="16" y="228">slot.sequence release-store</text>
+  </g>
+
+  <!-- ring -->
+  <g>
+    <circle cx="400" cy="200" r="112" fill="none" stroke="#6e7681" stroke-width="1.5"/>
+    <circle cx="400" cy="200" r="76" fill="none" stroke="#6e7681" stroke-width="1.5"/>
+    <text x="400" y="196" text-anchor="middle" fill="#8b949e" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="bold">SHM ring</text>
+    <text x="400" y="214" text-anchor="middle" fill="#8b949e" font-family="Helvetica, Arial, sans-serif" font-size="12">power-of-two slots</text>
+    <text x="400" y="232" text-anchor="middle" fill="#8b949e" font-family="Helvetica, Arial, sans-serif" font-size="12">index = seq &amp; mask</text>
+
+    <!-- slot dividers -->
+    <g stroke="#6e7681" stroke-width="1">
+      <line x1="400" y1="88" x2="400" y2="124"/>
+      <line x1="479" y1="121" x2="454" y2="146"/>
+      <line x1="512" y1="200" x2="476" y2="200"/>
+      <line x1="479" y1="279" x2="454" y2="254"/>
+      <line x1="400" y1="312" x2="400" y2="276"/>
+      <line x1="321" y1="279" x2="346" y2="254"/>
+      <line x1="288" y1="200" x2="324" y2="200"/>
+      <line x1="321" y1="121" x2="346" y2="146"/>
+    </g>
+
+    <!-- head pointer: rotates faster -->
+    <g>
+      <g>
+        <line x1="400" y1="200" x2="400" y2="80" stroke="#58a6ff" stroke-width="3"/>
+        <circle cx="400" cy="80" r="7" fill="#58a6ff"/>
+        <text x="400" y="66" text-anchor="middle" fill="#58a6ff" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="bold">head</text>
+        <animateTransform attributeName="transform" type="rotate" from="0 400 200" to="360 400 200" dur="6s" repeatCount="indefinite"/>
+      </g>
+    </g>
+
+    <!-- tail pointer: rotates slower, so it trails -->
+    <g>
+      <g>
+        <line x1="400" y1="200" x2="400" y2="80" stroke="#3fb950" stroke-width="3"/>
+        <circle cx="400" cy="80" r="7" fill="#3fb950"/>
+        <text x="400" y="66" text-anchor="middle" fill="#3fb950" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="bold">tail</text>
+        <animateTransform attributeName="transform" type="rotate" from="-70 400 200" to="290 400 200" dur="6s" repeatCount="indefinite"/>
+      </g>
+    </g>
+  </g>
+
+  <!-- consumer -->
+  <g font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#8b949e">
+    <text x="700" y="58" fill="#3fb950" font-size="13" font-weight="bold">Aggregator thread</text>
+    <rect x="590" y="72" width="270" height="98" rx="6" fill="none" stroke="#6e7681" stroke-width="1.5"/>
+    <text x="604" y="94">ShmConsumer::read — local tail per reader</text>
+    <text x="604" y="112">drain each feed until empty, then</text>
+    <text x="604" y="130">nanosleep 50 µs when every ring is idle</text>
+    <text x="604" y="152" fill="#d29922">process_tick → per-symbol OrderBook</text>
+
+    <rect x="590" y="196" width="270" height="70" rx="6" fill="none" stroke="#6e7681" stroke-width="1.5"/>
+    <text x="604" y="220" fill="#d29922" font-weight="bold">best bid / best ask</text>
+    <text x="604" y="240">NBBO tick written to the /nbbo ring</text>
+    <text x="604" y="258">feed-consumer reads it from another process</text>
+  </g>
+
+  <!-- arrows in / out -->
+  <g stroke="#6e7681" stroke-width="1.5" fill="none">
+    <path d="M126 120 L288 176"/>
+    <path d="M512 176 L590 120"/>
+    <path d="M512 224 L590 224"/>
+  </g>
+
+  <!-- ticks flying in and out -->
+  <g>
+    <circle r="5" fill="#58a6ff">
+      <animateMotion path="M126,120 L288,176" dur="1.6s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.1;0.8;1" dur="1.6s" repeatCount="indefinite"/>
+    </circle>
+    <circle r="5" fill="#58a6ff">
+      <animateMotion path="M126,157 L288,190" dur="1.6s" begin="0.5s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.1;0.8;1" dur="1.6s" begin="0.5s" repeatCount="indefinite"/>
+    </circle>
+    <circle r="5" fill="#3fb950">
+      <animateMotion path="M512,176 L590,120" dur="1.6s" begin="0.9s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.1;0.8;1" dur="1.6s" begin="0.9s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+
+  <text x="16" y="296" fill="#8b949e" font-family="Helvetica, Arial, sans-serif" font-size="12">The gap between head and tail is the backlog. A producer only claims a slot whose sequence says the reader has left it,</text>
+  <text x="16" y="316" fill="#8b949e" font-family="Helvetica, Arial, sans-serif" font-size="12">so a full ring makes write() fail and the simulator drops the tick rather than blocking the feed thread.</text>
+  <text x="16" y="344" fill="#8b949e" font-family="Helvetica, Arial, sans-serif" font-size="12">No locks anywhere on the path: a CAS on head, release/acquire on each slot's sequence counter, and a relaxed fetch_add on tail.</text>
+</svg>

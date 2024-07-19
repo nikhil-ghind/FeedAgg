@@ -6,45 +6,36 @@ A C++17 **market-data aggregator** that consumes from 15 simulated exchange feed
 
 ## Architecture
 
-```
-  Exchange Feeds (15 threads)
-  ┌──────────┐ ┌──────────┐   ┌──────────┐
-  │ NASDAQ   │ │  NYSE    │ … │   C2     │
-  │ simulator│ │ simulator│   │ simulator│
-  └────┬─────┘ └────┬─────┘   └────┬─────┘
-       │            │              │
-       ▼            ▼              ▼
-  ┌─────────────────────────────────────┐
-  │   Per-Feed SHM Ring Buffers         │
-  │  /feed_NASDAQ  /feed_NYSE  …        │
-  │  (POSIX shm_open + mmap)            │
-  └──────────────────┬──────────────────┘
-                     │
-                     ▼
-  ┌─────────────────────────────────────┐
-  │            Aggregator               │
-  │  ┌───────────────────────────────┐  │
-  │  │  parse_tick_simd()            │  │
-  │  │  SSE4.2 PCMPESTRI field scan  │  │
-  │  └───────────────────────────────┘  │
-  │  ┌───────────────────────────────┐  │
-  │  │  Per-Symbol OrderBook         │  │
-  │  │  bid: map<price,qty,greater>  │  │
-  │  │  ask: map<price,qty>          │  │
-  │  └───────────────────────────────┘  │
-  └──────────────────┬──────────────────┘
-                     │ NBBO updates
-                     ▼
-  ┌─────────────────────────────────────┐
-  │     SHM Channel  /nbbo              │
-  │     (lock-free ring buffer)         │
-  └──────────────────┬──────────────────┘
-                     │
-                     ▼
-  ┌─────────────────────────────────────┐
-  │         ShmConsumer (feed-consumer) │
-  │   prints NBBO / computes stats      │
-  └─────────────────────────────────────┘
+<img src="docs/ring-buffer.svg" alt="Feed threads publishing ticks into a lock-free shared-memory ring buffer whose head and tail sequence counters chase each other, drained by the aggregator" width="880">
+
+```mermaid
+flowchart TB
+    subgraph sim["FeedSimulator — 15 threads, one per exchange"]
+        F1["NASDAQ thread<br/>random-walk mid, 2 bps spread"]
+        F2["NYSE thread"]
+        FN["... C2 thread"]
+    end
+
+    F1 --> C1[("/feed_NASDAQ<br/>ShmProducer ring")]
+    F2 --> C2[("/feed_NYSE ring")]
+    FN --> CN[("/feed_C2 ring")]
+
+    subgraph agg["Aggregator thread — src/aggregator.cpp"]
+        POLL["run(): round-robin over one ShmConsumer per feed,<br/>drain each until empty, nanosleep 50us when all idle"]
+        PT["process_tick<br/>bump ticks_processed_"]
+        OB["per-symbol OrderBook<br/>bid: map&lt;price, qty, greater&gt;<br/>ask: map&lt;price, qty&gt;"]
+        BBO["best bid / best ask"]
+    end
+    C1 --> POLL
+    C2 --> POLL
+    CN --> POLL
+    POLL --> PT --> OB --> BBO
+
+    BBO --> NB[("/nbbo ring<br/>ShmProducer, unlinked on shutdown")]
+    NB --> CONS["feed-consumer binary<br/>ShmConsumer with its own local tail,<br/>prints NBBO updates"]
+
+    MET["Metrics<br/>per-feed ticks/s, parse and book-update<br/>latency histograms, reporter thread"] -.-> MAIN["main.cpp<br/>starts simulator, aggregator, reporter;<br/>joins on Ctrl+C"]
+    SIMD["simd_parser.hpp — parse_tick_simd<br/>SSE4.2 field scan for JSON text feeds;<br/>the bundled simulator writes packed Tick structs,<br/>so it is not on this binary hot path"] -.-> agg
 ```
 
 ---
